@@ -10,6 +10,16 @@ use crate::config::{lower, org_and_name, ProjectConfig};
 
 use super::{trim, trim_react_native};
 
+fn deserialize_browser_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    if let Ok(s) = ProjectConfig::opt_relative_path(deserializer) {
+        return Ok(s);
+    }
+    Ok(None)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -19,7 +29,7 @@ pub(crate) struct PackageJson {
     version: Option<String>,
     repository: PackageJsonRepo,
     #[serde(default)]
-    #[serde(deserialize_with = "ProjectConfig::opt_relative_path")]
+    #[serde(deserialize_with = "deserialize_browser_string")]
     browser: Option<String>,
     #[serde(alias = "react-native")]
     #[serde(default)]

@@ -21,7 +21,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use anyhow::{Context, Result};
+use anyhow::{Context};
 use askama::Template;
 use heck::ToUpperCamelCase;
 use uniffi_bindgen::interface::{AsType, Callable, FfiDefinition, FfiType, Type, UniffiTrait};
@@ -30,7 +30,7 @@ use uniffi_bindgen::ComponentInterface;
 pub(crate) use self::{config::TsConfig as Config, util::format_directory};
 use self::{
     filters::{ffi_converter_name, type_name},
-    oracle::CodeOracle,
+    oracle::{CodeOracle, Result},
 };
 use crate::{
     bindings::{

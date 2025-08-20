@@ -1,3 +1,4 @@
+use anyhow::bail;
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -5,14 +6,14 @@
  */
 use heck::{ToLowerCamelCase, ToUpperCamelCase};
 use uniffi_bindgen::{
-    backend::{Literal, Type},
-    interface::{AsType, FfiType},
+    interface::{AsType, FfiType, DefaultValue},
     ComponentInterface,
 };
 
 use super::*;
 
 pub(crate) struct CodeOracle;
+pub(crate) type Result<T> = std::result::Result<T, anyhow::Error>;
 
 impl CodeOracle {
     pub(crate) fn find(&self, type_: &Type) -> Box<dyn CodeType> {
@@ -69,7 +70,7 @@ impl CodeOracle {
             FfiType::UInt64 | FfiType::Int64 => "0n".to_owned(),
             FfiType::Float64 => "0.0".to_owned(),
             FfiType::Float32 => "0.0".to_owned(),
-            FfiType::RustArcPtr(_) => "null".to_owned(),
+            FfiType::Handle => "0n".to_owned(),
             FfiType::RustBuffer(_) => "/*empty*/ new Uint8Array(0)".to_owned(),
             FfiType::Callback(_) => "null".to_owned(),
             FfiType::RustCallStatus => "uniffiCreateCallStatus()".to_owned(),
@@ -89,6 +90,7 @@ impl CodeOracle {
             | FfiType::UInt64
             | FfiType::Float32
             | FfiType::Float64
+            | FfiType::Handle
             | FfiType::RustBuffer(_) => {
                 format!("UniffiResult<{}>", self.ffi_type_label(ffi_type))
             }
@@ -96,7 +98,6 @@ impl CodeOracle {
                 self.ffi_type_label(ffi_type)
             }
             FfiType::Struct(_) => self.ffi_type_label(ffi_type),
-            FfiType::RustArcPtr(_) => "PointerByReference".to_owned(),
             // JNA structs default to ByReference
             _ => panic!("{ffi_type:?} by reference is not implemented"),
         }
@@ -104,7 +105,6 @@ impl CodeOracle {
 
     pub(crate) fn ffi_type_label_for_cpp(&self, ffi_type: &FfiType) -> String {
         match ffi_type {
-            FfiType::RustArcPtr(_) => "UniffiRustArcPtr".to_string(),
             FfiType::ForeignBytes => "Uint8Array".to_string(),
             FfiType::RustBuffer(_) => "string".to_string(),
             _ => self.ffi_type_label(ffi_type),
@@ -120,7 +120,6 @@ impl CodeOracle {
             FfiType::Float32 => "number".to_string(),
             FfiType::Float64 => "number".to_string(),
             FfiType::Handle => "bigint".to_string(),
-            FfiType::RustArcPtr(_) => "bigint".to_string(),
             FfiType::RustBuffer(_) => "Uint8Array".to_string(),
             FfiType::RustCallStatus => "UniffiRustCallStatus".to_string(),
             FfiType::ForeignBytes => "ForeignBytes".to_string(),
@@ -181,7 +180,7 @@ impl<T: AsType> AsCodeType for T {
                 key_type,
                 value_type,
             } => Box::new(compounds::MapCodeType::new(*key_type, *value_type)),
-            Type::Custom { name, .. } => Box::new(custom::CustomCodeType::new(name)),
+            Type::Custom { name, builtin, .. } => Box::new(custom::CustomCodeType::new(name, builtin.as_codetype())),
         }
     }
 }
@@ -207,8 +206,11 @@ pub(crate) trait CodeType: std::fmt::Debug {
     /// with this type only.
     fn canonical_name(&self) -> String;
 
-    fn literal(&self, _literal: &Literal, ci: &ComponentInterface) -> String {
-        unimplemented!("Unimplemented for {}", self.type_label(ci))
+    fn default(&self, default: &DefaultValue, ci: &ComponentInterface) -> Result<String> {
+        match default {
+            DefaultValue::Default => Ok(format!("{}()", self.type_label(ci))),
+            DefaultValue::Literal(_) => bail!("Literals for named types are not supported"),
+        }
     }
 
     /// Name of the FfiConverter

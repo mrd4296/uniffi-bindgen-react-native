@@ -7,11 +7,8 @@ use super::{
     oracle::{AsCodeType, CodeOracle},
     TypeRenderer,
 };
-pub(crate) use uniffi_bindgen::backend::filters::*;
 use uniffi_bindgen::{
-    backend::{Literal, Type},
-    interface::{AsType, Enum, FfiType, Variant},
-    ComponentInterface,
+    interface::{AsType, DefaultValue, Enum, FfiType, Literal, Type, Variant}, to_askama_error, ComponentInterface
 };
 
 pub(super) fn type_name(
@@ -20,6 +17,10 @@ pub(super) fn type_name(
 ) -> Result<String, askama::Error> {
     let type_ = types.as_type(as_type);
     Ok(type_.as_codetype().type_label(types.ci))
+}
+
+pub(super) fn ffi_type(type_: &impl AsType) -> askama::Result<FfiType, askama::Error> {
+    Ok(type_.as_type().into())
 }
 
 pub(super) fn ffi_type_name_from_type(
@@ -100,47 +101,28 @@ pub(super) fn lift_fn(
     ))
 }
 
-pub fn render_literal(
-    literal: &Literal,
+pub fn render_default(
+    default: &DefaultValue,
     as_ct: &impl AsType,
     ci: &ComponentInterface,
 ) -> Result<String, askama::Error> {
-    Ok(as_ct.as_codetype().literal(literal, ci))
+    as_ct
+        .as_codetype()
+        .default(default, ci)
+        .map_err(|e| to_askama_error(&e))
 }
 
 pub fn variant_discr_literal(
     e: &Enum,
     index: &usize,
-    ci: &ComponentInterface,
+    _ci: &ComponentInterface,
 ) -> Result<String, askama::Error> {
     let literal = e.variant_discr(*index).expect("invalid index");
-    let ts_literal = Type::Int32.as_codetype().literal(&literal, ci);
-    Ok(match literal {
-        Literal::String(_) => ts_literal,
-        Literal::UInt(_, _, typ) | Literal::Int(_, _, typ)
-            if !matches!(&typ, &Type::Int64 | &Type::UInt64) =>
-        {
-            ts_literal
-        }
-        // Discriminant do not travel across the FFI, so we don't have to maintain bit
-        // parity here: we can do things for the convenience of the ts developer.
-        // Here, we cast a BigInt down to a number iff the number is representable by the number.
-        Literal::UInt(n, _, _) => {
-            if n < (u32::MAX as u64) {
-                format!("{n}")
-            } else {
-                format!("\"{n}\"")
-            }
-        }
-        Literal::Int(n, _, _) => {
-            if (i32::MIN as i64) < n && n < (i32::MAX as i64) {
-                format!("{n}")
-            } else {
-                format!("\"{n}\"")
-            }
-        }
-        _ => format!("\"{ts_literal}\""),
-    })
+    match literal {
+        Literal::UInt(v, _, _) => Ok(v.to_string()),
+        Literal::Int(v, _, _) => Ok(v.to_string()),
+        _ => unreachable!("expected an UInt!"),
+    }
 }
 
 pub fn ffi_type_name_for_cpp(type_: &FfiType, is_internal: &bool) -> Result<String, askama::Error> {

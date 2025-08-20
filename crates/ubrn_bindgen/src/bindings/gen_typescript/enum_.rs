@@ -1,11 +1,12 @@
+use anyhow::bail;
 /*
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/
  */
-use uniffi_bindgen::{backend::Literal, ComponentInterface};
+use uniffi_bindgen::{interface::{DefaultValue, Literal}, ComponentInterface};
 
-use super::oracle::{CodeOracle, CodeType};
+use super::oracle::{CodeOracle, CodeType, Result};
 
 #[derive(Debug)]
 pub struct EnumCodeType {
@@ -41,15 +42,15 @@ impl CodeType for EnumCodeType {
         format!("Type{}", self.id)
     }
 
-    fn literal(&self, literal: &Literal, ci: &ComponentInterface) -> String {
-        if let Literal::Enum(v, _) = literal {
-            format!(
+    fn default(&self, default: &DefaultValue, ci: &ComponentInterface) -> Result<String> {
+        if let DefaultValue::Literal(Literal::Enum(v, _)) = default {
+            Ok(format!(
                 "{}.{}",
                 self.type_label(ci),
                 CodeOracle.enum_variant_name(v)
-            )
+            ))
         } else {
-            unreachable!();
+            bail!("Invalid literal for enum type: {default:?}")
         }
     }
 }

@@ -11,7 +11,7 @@ use topological_sort::TopologicalSort;
 use uniffi_bindgen::{
     interface::{
         FfiArgument, FfiCallbackFunction, FfiDefinition, FfiField, FfiFunction, FfiStruct, FfiType,
-        Function, Method, Object, UniffiTrait,
+        Function, Object, UniffiTrait,
     },
     ComponentInterface,
 };
@@ -284,6 +284,7 @@ pub(crate) impl Object {
             UniffiTrait::Display { .. } => nm == "Display",
             UniffiTrait::Eq { .. } => nm == "Eq",
             UniffiTrait::Hash { .. } => nm == "Hash",
+            UniffiTrait::Ord { .. } => nm == "Ord",
         }
     }
 
@@ -294,24 +295,12 @@ pub(crate) impl Object {
     }
 
     fn ffi_function_bless_pointer(&self) -> FfiFunction {
-        let meta = uniffi_meta::MethodMetadata {
-            module_path: "internal".to_string(),
-            self_name: self.name().to_string(),
-            name: "ffi__bless_pointer".to_owned(),
-            is_async: false,
-            inputs: Default::default(),
-            return_type: None,
-            throws: None,
-            checksum: None,
-            docstring: None,
-            takes_self_by_arc: false,
-        };
-        let func: Method = meta.into();
-        let mut ffi = func.ffi_func().clone();
+        let mut ffi = FfiFunction::default();
         ffi.init(
-            Some(FfiType::RustArcPtr(String::from(""))),
+            Some(FfiType::UInt64),
             vec![FfiArgument::new("pointer", FfiType::UInt64)],
         );
+        ffi.rename(format!("{}__ffi__bless_pointer", self.name()));
         ffi
     }
 }
@@ -376,7 +365,6 @@ pub(crate) impl FfiType {
             | Self::Float64
             | Self::Handle
             | Self::RustCallStatus
-            | Self::RustArcPtr(_)
             | Self::RustBuffer(_)
             | Self::VoidPointer => ci.cpp_namespace_includes(),
             Self::Callback(name) => format!(
